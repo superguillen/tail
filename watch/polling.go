@@ -49,7 +49,7 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 	}
 
 	changes := NewFileChanges()
-	var prevModTime time.Time
+	prevModTime := origFi.ModTime()
 
 	// XXX: use tomb.Tomb to cleanly manage these goroutines. replace
 	// the fatal (below) with tomb's Kill.
