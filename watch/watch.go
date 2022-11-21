@@ -11,10 +11,11 @@ type FileWatcher interface {
 	BlockUntilExists(*tomb.Tomb) error
 
 	// ChangeEvents reports on changes to a file, be it modification,
-	// deletion, renames or truncations. Returned FileChanges group of
+	// deletion, creation, renames or truncations. Returned FileChanges group of
 	// channels will be closed, thus become unusable, after a deletion
 	// or truncation event.
 	// In order to properly report truncations, ChangeEvents requires
 	// the caller to pass their current offset in the file.
+	// File creations are reported when the watcher is initialized on the parent directory.
 	ChangeEvents(*tomb.Tomb, int64) (*FileChanges, error)
 }

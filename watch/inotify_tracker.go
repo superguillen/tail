@@ -10,9 +10,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/influxdata/tail/util"
-
 	"gopkg.in/fsnotify.v1"
+
+	"github.com/influxdata/tail/util"
 )
 
 type InotifyTracker struct {
@@ -31,8 +31,8 @@ type watchInfo struct {
 	fname string
 }
 
-func (this *watchInfo) isCreate() bool {
-	return this.op == fsnotify.Create
+func (winfo *watchInfo) isCreate() bool {
+	return winfo.op == fsnotify.Create
 }
 
 var (
@@ -199,8 +199,21 @@ func (shared *InotifyTracker) sendEvent(event fsnotify.Event) {
 	name := filepath.Clean(event.Name)
 
 	shared.mux.Lock()
-	ch := shared.chans[name]
-	done := shared.done[name]
+
+	// since the watcher could be defined on a directory, we check if the directory is present in the channels map
+	dir := filepath.Dir(name)
+	var ch chan fsnotify.Event
+	var done chan bool
+	var ok bool
+
+	if ch, ok = shared.chans[dir]; ok {
+		// watcher on directory present, only need to initialize "done"
+		done = shared.done[dir]
+	} else {
+		ch = shared.chans[name]
+		done = shared.done[name]
+	}
+
 	shared.mux.Unlock()
 
 	if ch != nil && done != nil {
