@@ -6,10 +6,12 @@ package watch
 import (
 	"os"
 	"runtime"
+	"sync/atomic"
 	"time"
 
-	"github.com/influxdata/tail/util"
 	"gopkg.in/tomb.v1"
+
+	"github.com/influxdata/tail/util"
 )
 
 // PollingFileWatcher polls the file for changes.
@@ -54,10 +56,10 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 	// XXX: use tomb.Tomb to cleanly manage these goroutines. replace
 	// the fatal (below) with tomb's Kill.
 
-	fw.Size = pos
+	atomic.StoreInt64(&fw.Size, pos)
 
 	go func() {
-		prevSize := fw.Size
+		prevSize := atomic.LoadInt64(&fw.Size)
 		for {
 			select {
 			case <-t.Dying():
@@ -87,19 +89,19 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 			}
 
 			// File got truncated?
-			fw.Size = fi.Size()
-			if prevSize > 0 && prevSize > fw.Size {
+			atomic.StoreInt64(&fw.Size, fi.Size())
+			if prevSize > 0 && prevSize > atomic.LoadInt64(&fw.Size) {
 				changes.NotifyTruncated()
-				prevSize = fw.Size
+				prevSize = atomic.LoadInt64(&fw.Size)
 				continue
 			}
 			// File got bigger?
-			if prevSize > 0 && prevSize < fw.Size {
+			if prevSize > 0 && prevSize < atomic.LoadInt64(&fw.Size) {
 				changes.NotifyModified()
-				prevSize = fw.Size
+				prevSize = atomic.LoadInt64(&fw.Size)
 				continue
 			}
-			prevSize = fw.Size
+			prevSize = atomic.LoadInt64(&fw.Size)
 
 			// File was appended to (changed)?
 			modTime := fi.ModTime()

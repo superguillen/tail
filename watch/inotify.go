@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/influxdata/tail/util"
+	"sync/atomic"
 
 	"gopkg.in/fsnotify.v1"
 	"gopkg.in/tomb.v1"
+
+	"github.com/influxdata/tail/util"
 )
 
 // InotifyFileWatcher uses inotify to monitor file changes.
@@ -72,14 +73,14 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 	}
 
 	changes := NewFileChanges()
-	fw.Size = pos
+	atomic.StoreInt64(&fw.Size, pos)
 
 	go func() {
 
 		events := Events(fw.Filename)
 
 		for {
-			prevSize := fw.Size
+			prevSize := atomic.LoadInt64(&fw.Size)
 
 			var evt fsnotify.Event
 			var ok bool
@@ -125,14 +126,13 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 					// XXX: report this error back to the user
 					util.Fatal("Failed to stat file %v: %v", fw.Filename, err)
 				}
-				fw.Size = fi.Size()
+				atomic.StoreInt64(&fw.Size, fi.Size())
 
-				if prevSize > 0 && prevSize > fw.Size {
+				if prevSize > 0 && prevSize > atomic.LoadInt64(&fw.Size) {
 					changes.NotifyTruncated()
 				} else {
 					changes.NotifyModified()
 				}
-				prevSize = fw.Size
 			}
 		}
 	}()

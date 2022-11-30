@@ -3,7 +3,6 @@ package watch
 import (
 	"errors"
 	"fmt"
-	"gopkg.in/tomb.v1"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"gopkg.in/tomb.v1"
 )
 
 func TestWatchNotify(t *testing.T) {
@@ -44,8 +45,8 @@ func TestWatchNotify(t *testing.T) {
 			var werr error
 			changes := 0
 			chanClose := make(chan struct{})
+			wg.Add(1)
 			go func() {
-				wg.Add(1)
 				changes, werr = watchFile(filePath, test.poll, chanClose)
 				wg.Done()
 			}()
