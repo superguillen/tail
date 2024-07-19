@@ -3,7 +3,6 @@ package watch
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,64 +15,105 @@ import (
 )
 
 func TestWatchNotify(t *testing.T) {
+	tmpDir := t.TempDir()
 	testCases := []struct {
-		name string
-		poll bool
+		name    string
+		poll    bool
+		toWatch func() []string
 	}{
-		{"Test watch inotify", false},
-		{"Test watch poll", true},
+		{
+			name: "Test watch inotify with directory",
+			poll: false,
+			toWatch: func() []string {
+				dirPath := filepath.Join(tmpDir, "testDir")
+				err := os.Mkdir(dirPath, 0755)
+				if err != nil {
+					t.Fatal(err)
+				}
+				xyzFile := filepath.Join(tmpDir, "xyz")
+				f, err := os.Create(xyzFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+				return []string{dirPath, xyzFile}
+			},
+		},
+		{
+			name: "Test watch poll",
+			poll: true,
+			toWatch: func() []string {
+				abcFile := filepath.Join(tmpDir, "abc")
+				f, err := os.Create(abcFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+				xyzFile := filepath.Join(tmpDir, "xyz")
+				f, err = os.Create(xyzFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+				return []string{abcFile, xyzFile}
+			},
+		},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			tmpDir, err := ioutil.TempDir("", "watch-")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(tmpDir)
-			filePath := filepath.Join(tmpDir, "a")
-			// create file
-			file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0777)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = file.Close()
-			if err != nil {
-				t.Fatal(err)
+			filesToWatch := test.toWatch()
+
+			// each file path test is done synchronously, but watcher works async
+			for _, filePath := range filesToWatch {
+				changes := 0
+				var werr error
+				var wg sync.WaitGroup
+				chanClose := make(chan struct{})
+				wg.Add(1)
+				go func(filePath string) {
+					changes, werr = watchFile(filePath, test.poll, chanClose)
+					wg.Done()
+				}(filePath)
+				wait := make(chan bool)
+
+				// check if file is a directory, if yes, create a file
+				if fi, err := os.Stat(filePath); err == nil && fi.IsDir() {
+					time.AfterFunc(time.Second, func() {
+						f, err := os.Create(filepath.Join(filePath, "a"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						f.Close()
+						filePath, _ = filepath.Abs(f.Name())
+						wait <- true
+					})
+					<-wait
+				}
+				writeToFile(t, filePath, "hello", true)
+				<-time.After(time.Second)
+				writeToFile(t, filePath, "world", true)
+				<-time.After(time.Second)
+				writeToFile(t, filePath, "end", false)
+				<-time.After(time.Second)
+				//err = os.Remove(filePath)
+				//if err != nil {
+				//	t.Fatal(err)
+				//}
+				rmFile(t, filePath)
+				chanClose <- struct{}{}
+				close(chanClose)
+				close(wait)
+				wg.Wait()
+				if werr != nil {
+					t.Fatal(werr)
+				}
+				// ideally, there should be 4 changes (2xmodified,1xtruncaed and 1xdeleted)
+				// but, notifications from fsnotify are usually 2 (2xmodify) and 3x from poll (2xmodify, 1xtruncated)
+				if changes < 1 || changes > 4 {
+					t.Errorf("Invalid changes count: %d\n", changes)
+				}
 			}
 
-			var wg sync.WaitGroup
-			var werr error
-			changes := 0
-			chanClose := make(chan struct{})
-			wg.Add(1)
-			go func() {
-				changes, werr = watchFile(filePath, test.poll, chanClose)
-				wg.Done()
-			}()
-
-			writeToFile(t, filePath, "hello", true)
-			<-time.After(time.Second)
-			writeToFile(t, filePath, "world", true)
-			<-time.After(time.Second)
-			writeToFile(t, filePath, "end", false)
-			<-time.After(time.Second)
-			//err = os.Remove(filePath)
-			//if err != nil {
-			//	t.Fatal(err)
-			//}
-			rmFile(t, filePath)
-			chanClose <- struct{}{}
-			wg.Wait()
-			close(chanClose)
-
-			if werr != nil {
-				t.Fatal(werr)
-			}
-			// ideally, there should be 4 changes (2xmodified,1xtruncaed and 1xdeleted)
-			// but, notifications from fsnotify are usually 2 (2xmodify) and 3x from poll (2xmodify, 1xtruncated)
-			if changes < 1 || changes > 4 {
-				t.Errorf("Invalid changes count: %d\n", changes)
-			}
 		})
 	}
 }
@@ -150,6 +190,9 @@ func watchFile(path string, poll bool, close <-chan struct{}) (int, error) {
 			}
 		case <-changes.Truncated:
 			fmt.Println("Truncated")
+			changesCount++
+		case <-changes.Created:
+			fmt.Println("Created")
 			changesCount++
 		case <-mytomb.Dying():
 			return -1, errors.New("dying")

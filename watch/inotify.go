@@ -133,6 +133,8 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 				} else {
 					changes.NotifyModified()
 				}
+			case evt.Op&fsnotify.Create == fsnotify.Create:
+				changes.NotifyCreated()
 			}
 		}
 	}()
