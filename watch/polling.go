@@ -16,12 +16,26 @@ import (
 
 // PollingFileWatcher polls the file for changes.
 type PollingFileWatcher struct {
-	Filename string
-	Size     int64
+	Filename     string
+	Size         int64
+	PollDuration time.Duration
 }
 
 func NewPollingFileWatcher(filename string) *PollingFileWatcher {
-	fw := &PollingFileWatcher{filename, 0}
+	fw := &PollingFileWatcher{
+		Filename:     filename,
+		Size:         0,
+		PollDuration: POLL_DURATION,
+	}
+	return fw
+}
+
+func NewPollingFileWatcherWithDuration(filename string, duration time.Duration) *PollingFileWatcher {
+	fw := &PollingFileWatcher{
+		Filename:     filename,
+		Size:         0,
+		PollDuration: duration,
+	}
 	return fw
 }
 
@@ -35,7 +49,7 @@ func (fw *PollingFileWatcher) BlockUntilExists(t *tomb.Tomb) error {
 			return err
 		}
 		select {
-		case <-time.After(POLL_DURATION):
+		case <-time.After(fw.PollDuration):
 			continue
 		case <-t.Dying():
 			return tomb.ErrDying
@@ -67,7 +81,7 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 			default:
 			}
 
-			time.Sleep(POLL_DURATION)
+			time.Sleep(fw.PollDuration)
 			fi, err := os.Stat(fw.Filename)
 			if err != nil {
 				// Windows cannot delete a file if a handle is still open (tail keeps one open)
