@@ -12,7 +12,7 @@ import (
 	"gopkg.in/fsnotify.v1"
 	"gopkg.in/tomb.v1"
 
-	"github.com/influxdata/tail/util"
+	"github.com/superguillen/tail/util"
 )
 
 // InotifyFileWatcher uses inotify to monitor file changes.

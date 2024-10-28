@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/fsnotify.v1"
 
-	"github.com/influxdata/tail/util"
+	"github.com/superguillen/tail/util"
 )
 
 type InotifyTracker struct {

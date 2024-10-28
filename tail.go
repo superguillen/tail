@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/influxdata/tail/ratelimiter"
-	"github.com/influxdata/tail/util"
-	"github.com/influxdata/tail/watch"
+	"github.com/superguillen/tail/ratelimiter"
+	"github.com/superguillen/tail/util"
+	"github.com/superguillen/tail/watch"
 	"gopkg.in/tomb.v1"
 )
 
