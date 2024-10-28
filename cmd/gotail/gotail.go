@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/influxdata/tail"
+	"github.com/superguillen/tail"
 )
 
 func args2config() (tail.Config, int64) {
@@ -51,7 +51,7 @@ func main() {
 
 func tailFile(filename string, config tail.Config, done chan bool) {
 	defer func() { done <- true }()
-	t, err := tail.TailFile(filename, config)
+	t, err := tail.TailFileEJournal(filename, config)
 	if err != nil {
 		fmt.Println(err)
 		return
