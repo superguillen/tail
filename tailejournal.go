@@ -1,5 +1,18 @@
 package tail
 
+import (
+        "errors"
+        "io"
+        "log"
+        "os"
+        "strings"
+        "time"
+
+        "github.com/influxdata/tail/util"
+        "github.com/influxdata/tail/watch"
+        "gopkg.in/tomb.v1"
+)
+
 // TailFileEJournal begins tailing the file. Output stream is made available
 // via the `Tail.Lines` channel. To handle errors during tailing,
 // invoke the `Wait` or `Err` method after finishing reading from the
@@ -39,7 +52,7 @@ func TailFileEJournal(filename string, config Config) (*Tail, error) {
 	return t, nil
 }
 
-#Change \n for \r, ATM ejournal only has \r (Old windows style)
+//Change \n for \r, ATM ejournal only has \r (Old windows style)
 func (tail *Tail) readLineEJournal() (string, error) {
 	tail.lk.Lock()
 	line, err := tail.reader.ReadString('\r')
