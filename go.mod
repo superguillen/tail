@@ -1,4 +1,4 @@
-module github.com/influxdata/tail
+module github.com/superguillen/tail
 
 go 1.13
 
